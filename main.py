@@ -26,9 +26,6 @@ VOICES = {
     "Chloe": "Chloe-英文女声",
     "Milo": "Milo-英文男声",
     "Dean": "Dean-英文男声",
-    # v2 TTS 音色（兼容）
-    "default_zh": "MiMo-中文女声",
-    "default_en": "MiMo-英文女声",
 }
 
 # 可用模型列表
@@ -36,7 +33,6 @@ TTS_MODELS = {
     "v2.5": "mimo-v2.5-tts",
     "v2.5_clone": "mimo-v2.5-tts-voiceclone",
     "v2.5_design": "mimo-v2.5-tts-voicedesign",
-    "v2": "mimo-v2-tts",
 }
 
 # API 端点配置

@@ -498,10 +498,6 @@
                         <div class="model-card-title">🎙️ V2.5 VoiceClone</div>
                         <div class="model-card-desc">上传音频复刻任意音色</div>
                     </div>
-                    <div class="model-card" data-model="v2" onclick="selectModel(this)">
-                        <div class="model-card-title">🔄 V2 </div>
-                        <div class="model-card-desc">支持风格控制</div>
-                    </div>
                 </div>
                 
                 <!-- 内置音色选择（V2.5） -->
@@ -527,30 +523,7 @@
                     </div>
                     <input type="file" id="audio_file" accept=".mp3,.wav,audio/mpeg,audio/wav" style="display:none" onchange="handleFileSelect(this)">
                 </div>
-                
-                <!-- 风格选择（仅 V2 模式显示） -->
-                <div id="style_section" class="hidden">
-                    <label style="margin-top:14px">风格</label>
-                    <select id="style_preset" onchange="applyStyle()">
-                        <option value="">无风格</option>
-                        <option value="变快">变快</option>
-                        <option value="变慢">变慢</option>
-                        <option value="开心">开心</option>
-                        <option value="悲伤">悲伤</option>
-                        <option value="生气">生气</option>
-                        <option value="悄悄话">悄悄话</option>
-                        <option value="夹子音">夹子音</option>
-                        <option value="台湾腔">台湾腔</option>
-                        <option value="东北话">东北话</option>
-                        <option value="四川话">四川话</option>
-                        <option value="河南话">河南话</option>
-                        <option value="粤语">粤语</option>
-                        <option value="唱歌">唱歌</option>
-                        <option value="custom">自定义...</option>
-                    </select>
-                    <input type="text" id="style_custom" placeholder="输入风格，如：孙悟空" style="display:none; margin-top:10px;">
-                </div>
-                
+
                 <button class="btn btn-primary" onclick="generate()" id="gen_btn">🎧 试听音频</button>
             </div>
             <div class="panel import-section">
@@ -611,11 +584,6 @@
                 { id: 'Chloe', name: 'Chloe-英文女声' },
                 { id: 'Milo', name: 'Milo-英文男声' },
                 { id: 'Dean', name: 'Dean-英文男声' },
-            ],
-            'v2': [
-                { id: 'mimo_default', name: 'MiMo-默认' },
-                { id: 'default_zh', name: 'MiMo-中文女声' },
-                { id: 'default_en', name: 'MiMo-英文女声' },
             ]
         };
 
@@ -623,42 +591,27 @@
             // 更新UI
             document.querySelectorAll('.model-card').forEach(c => c.classList.remove('active'));
             el.classList.add('active');
-            
+
             currentModel = el.dataset.model;
-            
-            // 切换模型时重置风格选择
-            document.getElementById('style_preset').value = '';
-            document.getElementById('style_custom').value = '';
-            document.getElementById('style_custom').style.display = 'none';
-            
+
             // 显示/隐藏对应区域
             const voiceSection = document.getElementById('voice_section');
             const designSection = document.getElementById('design_section');
             const cloneSection = document.getElementById('clone_section');
-            const styleSection = document.getElementById('style_section');
-            
+
             if (currentModel === 'v2.5_design') {
                 voiceSection.classList.add('hidden');
                 designSection.classList.remove('hidden');
                 cloneSection.classList.add('hidden');
-                styleSection.classList.add('hidden');
             } else if (currentModel === 'v2.5_clone') {
                 voiceSection.classList.add('hidden');
                 designSection.classList.add('hidden');
                 cloneSection.classList.remove('hidden');
-                styleSection.classList.add('hidden');
-            } else if (currentModel === 'v2') {
-                voiceSection.classList.remove('hidden');
-                designSection.classList.add('hidden');
-                cloneSection.classList.add('hidden');
-                styleSection.classList.remove('hidden');
-                updateVoiceSelect('v2');
             } else {
                 // v2.5 内置音色
                 voiceSection.classList.remove('hidden');
                 designSection.classList.add('hidden');
                 cloneSection.classList.add('hidden');
-                styleSection.classList.add('hidden');
                 updateVoiceSelect('v2.5');
             }
 
@@ -725,7 +678,7 @@
             renderHistory();
             updateVoiceSelect('v2.5'); // 初始化音色列表
             updateImportActions();
-            
+
             document.getElementById('api_key').addEventListener('change', function() {
                 localStorage.setItem('api_key', this.value);
             });
@@ -734,40 +687,29 @@
             });
         };
 
-        function applyStyle() {
-            const preset = document.getElementById('style_preset').value;
-            const custom = document.getElementById('style_custom');
-            custom.style.display = preset === 'custom' ? 'block' : 'none';
-        }
-
         async function generate() {
             const apiKey = document.getElementById('api_key').value;
             const text = document.getElementById('text_input').value.trim();
             const btn = document.getElementById('gen_btn');
             const endpoint = document.getElementById('api_endpoint').value;
-            
-            let style = document.getElementById('style_preset').value;
-            if (style === 'custom') style = document.getElementById('style_custom').value.trim();
-            
-            const finalText = style ? '<style>' + style + '</style>' + text : text;
-            
+
             if (!apiKey) return alert('请先填写 API Key');
             if (!text) return alert('请输入文本');
-            
+
             // VoiceClone 需要上传音频
             if (currentModel === 'v2.5_clone' && !audioBase64) {
                 return alert('请先上传音频样本');
             }
-            
+
             // VoiceDesign 需要音色描述
             if (currentModel === 'v2.5_design') {
                 const voiceDesc = document.getElementById('voice_desc').value.trim();
                 if (!voiceDesc) return alert('请输入音色描述');
             }
-            
+
             btn.innerHTML = '⏳ 生成中...';
             btn.disabled = true;
-            
+
             try {
                 // VoiceClone 使用 POST（音频数据量大），不保存历史记录
                 if (currentModel === 'v2.5_clone') {
@@ -778,7 +720,7 @@
                             api_key: apiKey,
                             model: currentModel,
                             audio: audioBase64,
-                            text: finalText,
+                            text: text,
                             endpoint: endpoint
                         })
                     });
@@ -792,23 +734,23 @@
                     audio.onerror = function() { btn.innerHTML = '🎧 试听音频'; btn.disabled = false; alert('生成失败'); };
                     return;
                 }
-                
+
                 // VoiceDesign 和普通模式使用 GET，保存历史记录
                 let url;
                 if (currentModel === 'v2.5_design') {
                     const voiceDesc = document.getElementById('voice_desc').value.trim();
-                    url = '/tts?api_key=' + encodeURIComponent(apiKey) + '&model=' + currentModel + '&voice=' + encodeURIComponent(voiceDesc) + '&text=' + encodeURIComponent(finalText) + '&endpoint=' + encodeURIComponent(endpoint);
+                    url = '/tts?api_key=' + encodeURIComponent(apiKey) + '&model=' + currentModel + '&voice=' + encodeURIComponent(voiceDesc) + '&text=' + encodeURIComponent(text) + '&endpoint=' + encodeURIComponent(endpoint);
                 } else {
                     const voice = document.getElementById('voice_select').value;
-                    url = '/tts?api_key=' + encodeURIComponent(apiKey) + '&voice=' + encodeURIComponent(voice) + '&model=' + currentModel + '&text=' + encodeURIComponent(finalText) + '&endpoint=' + encodeURIComponent(endpoint);
+                    url = '/tts?api_key=' + encodeURIComponent(apiKey) + '&voice=' + encodeURIComponent(voice) + '&model=' + currentModel + '&text=' + encodeURIComponent(text) + '&endpoint=' + encodeURIComponent(endpoint);
                 }
-                
-                const item = { text: style ? '[' + style + '] ' + text : text, url: url };
+
+                const item = { text: text, url: url };
                 historyList.unshift(item);
                 if (historyList.length > 20) historyList.pop();
                 localStorage.setItem('tts_history', JSON.stringify(historyList));
                 renderHistory();
-                
+
                 const audio = new Audio(url);
                 audio.oncanplay = function() { btn.innerHTML = '🎧 试听音频'; btn.disabled = false; audio.play(); };
                 audio.onerror = function() { btn.innerHTML = '🎧 试听音频'; btn.disabled = false; alert('生成失败'); };
@@ -858,9 +800,7 @@
             let importModel = 'v2.5';
             let voice = document.getElementById('voice_select').value;
 
-            if (currentModel === 'v2') {
-                importModel = 'v2';
-            } else if (currentModel === 'v2.5_clone') {
+            if (currentModel === 'v2.5_clone') {
                 alert('V2.5 VoiceClone 暂不支持直接导入和扫码导入');
                 return '';
             } else if (currentModel === 'v2.5_design') {
