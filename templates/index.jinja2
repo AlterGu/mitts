@@ -66,6 +66,20 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15);
         }
+        .test-btn {
+            background: var(--input-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .test-btn:hover {
+            background: var(--card-hover) !important;
+            border-color: var(--primary) !important;
+            color: var(--primary) !important;
+        }
         .header .api-group {
             display: flex;
             align-items: center;
@@ -228,10 +242,6 @@
         }
         .import-section { margin-top: 0; }
         .import-notice {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
             padding: 10px 12px;
             background: #fff7ed;
             border-radius: 8px;
@@ -450,9 +460,25 @@
             word-break: break-all;
         }
         @media (max-width: 900px) {
-            .header { flex-direction: column; gap: 12px; align-items: stretch; }
-            .header input { width: 100%; }
-            .main { flex-direction: column; height: auto; min-height: calc(100vh - 120px); }
+            .header { flex-direction: column; gap: 12px; align-items: stretch; padding: 16px; }
+            .header .api-group {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+                width: 100%;
+            }
+            .api-key-container {
+                width: 100% !important;
+            }
+            .header input, #api_key, #api_endpoint {
+                width: 100% !important;
+            }
+            .test-btn {
+                width: 100%;
+                text-align: center;
+                padding: 12px !important;
+            }
+            .main { flex-direction: column; height: auto; min-height: calc(100vh - 120px); padding: 10px; }
             .left, .center, .right { width: 100%; }
             .center { min-height: 250px; }
             .right { max-height: 350px; }
@@ -477,7 +503,11 @@
                 <option value="tokenplan">TokenPlan</option>
             </select>
             <span class="api-label">API Key</span>
-            <input type="password" id="api_key" placeholder="sk-...">
+            <div class="api-key-container" style="position: relative; display: flex; align-items: center;">
+                <input type="password" id="api_key" placeholder="sk-..." style="padding-right: 36px; width: 280px;">
+                <span id="toggle_key_btn" onclick="toggleKeyVisibility()" style="position: absolute; right: 10px; cursor: pointer; user-select: none; font-size: 14px;">👁️</span>
+            </div>
+            <button class="test-btn" onclick="testConnection()" id="test_btn" style="padding: 10px 16px;">⚡ 测试连接</button>
         </div>
     </div>
     <div class="main">
@@ -529,10 +559,7 @@
             <div class="panel import-section">
                 <div class="section-title">导入阅读 App</div>
                 <div class="import-notice">
-                    <span class="notice-icon">⚠️</span>
-                    <span class="notice-text">使用前请先在顶部填写 <b>API Key</b>，并选择对应的 <b>API 端点</b></span>
-                    <a href="https://platform.xiaomimimo.com/" target="_blank" class="notice-link">申请地址</a>
-                    <span class="notice-text">，输入后可使用本软件全部功能</span>
+                    <span class="notice-text">💡 <b>快速上手</b>：请在顶部输入您的 <b>API Key</b>（<a href="https://platform.xiaomimimo.com/" target="_blank" class="notice-link">点击申请</a>）并选择 <b>API 端点</b>，即可解锁完整语音合成及一键导入功能。</span>
                 </div>
                 <div class="import-actions">
                     <div class="import-btn" id="direct_import_btn" onclick="directImport()">📱 直接导入</div>
@@ -560,7 +587,7 @@
     <div class="modal" id="qr_modal">
         <div class="modal-content">
             <h3>扫码导入</h3>
-            <p>用浏览器扫描下方二维码</p>
+            <p style="line-height: 1.5; margin-bottom: 15px;">用浏览器扫描下方二维码<br>扫描后复制链接导入到legado</p> 
             <div id="qr_code" style="display:flex; justify-content:center; padding:15px; background:#fff; border-radius:12px; margin-bottom:15px;"></div>
             <button class="btn btn-primary" onclick="closeQRModal()">关闭</button>
         </div>
@@ -664,6 +691,54 @@
                 handleFileSelect(document.getElementById('audio_file'));
             }
         });
+
+        function toggleKeyVisibility() {
+            const keyInput = document.getElementById('api_key');
+            const toggleBtn = document.getElementById('toggle_key_btn');
+            if (keyInput.type === 'password') {
+                keyInput.type = 'text';
+                toggleBtn.textContent = '🔒';
+            } else {
+                keyInput.type = 'password';
+                toggleBtn.textContent = '👁️';
+            }
+        }
+
+        async function testConnection() {
+            const apiKey = document.getElementById('api_key').value.trim();
+            const endpoint = document.getElementById('api_endpoint').value;
+            const btn = document.getElementById('test_btn');
+
+            if (!apiKey) {
+                alert('请先填写 API Key');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ 测试中...';
+
+            try {
+                // 直接请求真实的 /tts 接口，用极简的 "test" 文本做生成测试，以排除前后端和上游调用模式不一致导致的误报
+                const testUrl = '/tts?api_key=' + encodeURIComponent(apiKey) + 
+                                '&voice=冰糖' + 
+                                '&model=v2.5' + 
+                                '&text=' + encodeURIComponent('test') + 
+                                '&endpoint=' + encodeURIComponent(endpoint);
+                
+                const response = await fetch(testUrl);
+                if (response.ok) {
+                    alert('🎉 连接成功！API Key 与端点有效。');
+                } else {
+                    const errorMsg = await response.text();
+                    alert('❌ 连接失败：\n' + (errorMsg || ('HTTP 状态码: ' + response.status)));
+                }
+            } catch (err) {
+                alert('❌ 请求失败，请检查网络或服务端是否正常运行：' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '⚡ 测试连接';
+            }
+        }
 
         window.onload = function() {
             document.getElementById('api_key').value = localStorage.getItem('api_key') || '';
@@ -818,7 +893,23 @@
         function directImport() {
             const sourceUrl = getImportUrl();
             if (!sourceUrl) return;
+            
+            // 检测是否为移动端设备，防止在 PC 浏览器点击触发协议未注册的报错
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            console.log('[Direct Import] 设备检测结果:', { 
+                userAgent: navigator.userAgent, 
+                isMobile: isMobile 
+            });
+            console.log('[Direct Import] 生成的阅读导入配置链接 (sourceUrl):', sourceUrl);
+
+            if (!isMobile) {
+                alert('💡 提示：\n“直接导入”仅支持在安装了“阅读”App 的手机端浏览器中操作。\n\nPC 端请点击旁边的【扫码导入】，用手机扫描生成的二维码进行导入。');
+                return;
+            }
+            
             const importUrl = 'legado://import/httpTTS?src=' + encodeURIComponent(sourceUrl);
+            console.log('[Direct Import] 唤起 Legado 一键导入 Scheme (importUrl):', importUrl);
             window.location.href = importUrl;
         }
 

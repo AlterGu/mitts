@@ -4,7 +4,7 @@ import urllib.parse
 import logging
 from fastapi import FastAPI, Response, Request
 from fastapi.responses import JSONResponse, HTMLResponse
-from openai import OpenAI
+from openai import AsyncOpenAI
 import uvicorn
 from jinja2 import Environment, FileSystemLoader
 
@@ -14,6 +14,15 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 env = Environment(loader=FileSystemLoader("templates"))
 env.cache = None
+
+# 全局客户端缓存，避免高并发下频繁握手
+CLIENT_CACHE = {}
+
+def get_openai_client(api_key: str, base_url: str) -> AsyncOpenAI:
+    cache_key = (api_key, base_url)
+    if cache_key not in CLIENT_CACHE:
+        CLIENT_CACHE[cache_key] = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=15.0)
+    return CLIENT_CACHE[cache_key]
 
 VOICES = {
     # v2.5 TTS 音色（默认冰糖）
@@ -55,7 +64,8 @@ async def favicon():
 
 @app.get("/")
 async def index_page(request: Request):
-    base_url = str(request.base_url).replace("http://", "https://").rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    base_url = f"{proto}://{request.url.netloc}"
     options_html = "".join(
         [f'<option value="{k}">{v}</option>' for k, v in VOICES.items()]
     )
@@ -83,8 +93,14 @@ async def tts_forwarder(request: Request):
         model = request.query_params.get("model", "v2.5")
         audio_b64 = request.query_params.get("audio", "")
         endpoint = request.query_params.get("endpoint", "xiaomimimo")
+
+        # GET 请求限制大音频 base64，防范 414 错误
+        if model == "v2.5_clone" or (audio_b64 and len(audio_b64) > 1024):
+            return JSONResponse(status_code=400, content={"detail": "VoiceClone 模式的数据量过大，请使用 POST 请求"})
+
         text = urllib.parse.unquote(urllib.parse.unquote(text))
-        audio_b64 = urllib.parse.unquote(urllib.parse.unquote(audio_b64))
+        if audio_b64:
+            audio_b64 = urllib.parse.unquote(urllib.parse.unquote(audio_b64))
 
     # 获取实际模型名称
     model_name = TTS_MODELS.get(model, TTS_MODELS["v2.5"])
@@ -94,13 +110,14 @@ async def tts_forwarder(request: Request):
     base_url = api_config["base_url"]
 
     try:
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        # 获取缓存复用的异步客户端
+        client = get_openai_client(api_key, base_url)
         
         # 根据不同模型构建请求
         if model == "v2.5_clone" and audio_b64:
             # VoiceClone: voice 格式是 data:audio/mpeg;base64,{base64}
             voice_data = f"data:audio/mpeg;base64,{audio_b64}"
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "assistant", "content": text},
@@ -110,7 +127,7 @@ async def tts_forwarder(request: Request):
             )
         elif model == "v2.5_design":
             # VoiceDesign: user 消息是音色描述，assistant 消息是要朗读的文本
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "user", "content": voice},  # voice 是音色描述
@@ -121,7 +138,7 @@ async def tts_forwarder(request: Request):
             )
         else:
             # v2.5 内置音色 或 v2
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=model_name,
                 messages=[
                     {"role": "assistant", "content": text},
@@ -147,14 +164,20 @@ async def tts_forwarder(request: Request):
         )
         
     except Exception as e:
-        logger.error(f"TTS Error: {type(e).__name__}: {e}")
+        # 日志脱敏，防止错误详情中包含明文 api_key
+        error_msg = str(e)
+        if api_key and api_key in error_msg:
+            error_msg = error_msg.replace(api_key, "sk-***")
+        logger.error(f"TTS Error: {type(e).__name__}: {error_msg}")
         return Response(status_code=502, content=f"上游API错误: {type(e).__name__}")
 
 
 @app.get("/api/legado-import")
 async def legado_import(request: Request, voice: str = "冰糖", model: str = "v2.5", endpoint: str = "xiaomimimo"):
+    logger.info(f"Legado Import configuration requested. Client IP: {request.client.host if request.client else 'unknown'}, Voice: {voice}, Model: {model}, Endpoint: {endpoint}")
     api_key = request.query_params.get("api_key", "")
-    base_url = str(request.base_url).replace("http://", "https://").rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    base_url = f"{proto}://{request.url.netloc}"
     v_name = VOICES.get(voice, f"音色({voice})")
     safe_api_key = urllib.parse.quote(api_key)
 
